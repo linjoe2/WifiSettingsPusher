@@ -4,12 +4,18 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
+import android.net.wifi.WifiNetworkSuggestion
 import android.os.Bundle
 import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.ListView
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,32 +23,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.wifisettingspusher.ui.theme.WifiSettingsPusherTheme
-import androidx.appcompat.app.AppCompatActivity
+import com.google.gson.Gson
 import com.hmdm.HeadwindMDM
 import com.hmdm.HeadwindMDM.EventHandler
 import com.hmdm.MDMService
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.wifi.ScanResult
-import android.net.wifi.WifiManager
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_EXCEEDS_MAX_PER_APP
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_INVALID
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_NOT_ALLOWED
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_APP_DISALLOWED
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_INTERNAL
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_REMOVE_INVALID
-import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS
-import android.net.wifi.WifiNetworkSuggestion
-import com.beust.klaxon.Klaxon
 
 
 data class Wifi(
     val ssid: String,
     val securityType: String,
     val password: String,
+    val location: String,
 )
+
 
 class MainActivity : AppCompatActivity(), EventHandler {
     private lateinit var headwindMDM: HeadwindMDM
@@ -64,17 +60,17 @@ class MainActivity : AppCompatActivity(), EventHandler {
         headwindMDM = HeadwindMDM.getInstance()
 //        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         wifiManager = getSystemService(Context.WIFI_SERVICE) as WifiManager
-        setContent {
-            WifiSettingsPusherTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Greeting("test")
-                }
-            }
-        }
+//        setContent {
+//            WifiSettingsPusherTheme {
+//                // A surface container using the 'background' color from the theme
+//                Surface(
+//                    modifier = Modifier.fillMaxSize(),
+//                    color = MaterialTheme.colorScheme.background
+//                ) {
+//                    Greeting("test")
+//                }
+//            }
+//        }
     }
 
     override fun onResume() {
@@ -82,7 +78,6 @@ class MainActivity : AppCompatActivity(), EventHandler {
         if (!headwindMDM.isConnected) {
             if (!headwindMDM.connect(this, this)) {
                 Log.d("error", "not connected")
-
             }
         } else {
             loadSettings()
@@ -106,21 +101,39 @@ class MainActivity : AppCompatActivity(), EventHandler {
     }
 
     private fun loadSettings() {
-        val wifiSettings = MDMService.Preferences.get("123", "empty")
+        val wifiSettings = MDMService.Preferences.get("wifiList", "[]")
+//        val wifiSettings = """
+//[
+//    {"location":"BlauweLijn","ssid":"OuterBassShip3","password":"WithBassToSpace", "securityType":"WPA2"},
+//    {"location":"Bonkelaar","ssid":"OuterBassShip4","password":"WithBassToSpace", "securityType":"WPA2"}
+//]
+//"""
+// Create a Gson instance
+        val gson = Gson()
 
-        val result = Klaxon()
-            .parse<Wifi>(wifiSettings)
+// Parse the JSON string into an array of objects
+        val arrayOfObjects = gson.fromJson(wifiSettings, Array<Wifi>::class.java)
+        val ssidList = arrayOfObjects.map { it.location }
+        setContentView(R.layout.activity_main)
+// Now, arrayOfObjects contains the parsed JSON data as an array of Wifi objects
+        val listView = findViewById<ListView>(R.id.listView)
+//
+        val arrayAdapter: ArrayAdapter<String> = ArrayAdapter(
+            this,
+            android.R.layout.simple_list_item_1, // Layout for each item
+            ssidList       // Your array of objects
+        )
 
-        setContent {
-            WifiSettingsPusherTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Greeting(wifiSettings)
-                }
-            }
+        listView.adapter = arrayAdapter
+
+        listView.setOnItemClickListener { parent, view, position, id ->
+            val selectedSsid = arrayOfObjects[position].ssid
+            val selectedItem = arrayOfObjects[position]
+            val selectedPass = arrayOfObjects[position].password
+            // Implement your logic here based on the selected ssid
+            connectByWifiNetworkSuggestion(selectedItem, selectedPass)
+
+                Log.d("selected", "loadSettings: $selectedSsid")
         }
     }
 
