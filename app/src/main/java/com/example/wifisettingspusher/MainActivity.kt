@@ -1,0 +1,187 @@
+package com.example.wifisettingspusher
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.wifisettingspusher.ui.theme.WifiSettingsPusherTheme
+import androidx.appcompat.app.AppCompatActivity
+import com.hmdm.HeadwindMDM
+import com.hmdm.HeadwindMDM.EventHandler
+import com.hmdm.MDMService
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.wifi.ScanResult
+import android.net.wifi.WifiManager
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_EXCEEDS_MAX_PER_APP
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_INVALID
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_NOT_ALLOWED
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_APP_DISALLOWED
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_INTERNAL
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_REMOVE_INVALID
+import android.net.wifi.WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS
+import android.net.wifi.WifiNetworkSuggestion
+import com.beust.klaxon.Klaxon
+
+
+data class Wifi(
+    val ssid: String,
+    val securityType: String,
+    val password: String,
+)
+
+class MainActivity : AppCompatActivity(), EventHandler {
+    private lateinit var headwindMDM: HeadwindMDM
+    private lateinit var suggestionPostConnectionReceiver: BroadcastReceiver
+    private lateinit var wifiManager: WifiManager
+
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val PERMISSION_REQUEST_CODE = 999
+        private const val SECURITY_TYPE_WPA3 = "WPA3"
+        private const val SECURITY_TYPE_WPA2 = "WPA2"
+        private const val SECURITY_TYPE_WPA = "WPA"
+        private const val SECURITY_TYPE_NA = "N/A"
+    }
+
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        headwindMDM = HeadwindMDM.getInstance()
+//        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        wifiManager = getSystemService(Context.WIFI_SERVICE) as WifiManager
+        setContent {
+            WifiSettingsPusherTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Greeting("test")
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!headwindMDM.isConnected) {
+            if (!headwindMDM.connect(this, this)) {
+                Log.d("error", "not connected")
+
+            }
+        } else {
+            loadSettings()
+        }
+    }
+
+    override fun onDestroy() {
+        headwindMDM.disconnect(this)
+        super.onDestroy()
+    }
+
+    override fun onHeadwindMDMConnected() {
+        loadSettings()
+    }
+
+    override fun onHeadwindMDMDisconnected() {
+    }
+
+    override fun onHeadwindMDMConfigChanged() {
+        loadSettings()
+    }
+
+    private fun loadSettings() {
+        val wifiSettings = MDMService.Preferences.get("123", "empty")
+
+        val result = Klaxon()
+            .parse<Wifi>(wifiSettings)
+
+        setContent {
+            WifiSettingsPusherTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Greeting(wifiSettings)
+                }
+            }
+        }
+    }
+
+
+    private fun connectByWifiNetworkSuggestion(wifi: Wifi, pass: String) {
+    Log.d(TAG, "connectByWifiNetworkSuggestion: wifi=$wifi, pass=$pass")
+        val suggestion = WifiNetworkSuggestion.Builder()
+            .setSsid(wifi.ssid)
+        when (wifi.securityType) {
+            SECURITY_TYPE_WPA3 -> suggestion.setWpa3Passphrase(pass)
+            SECURITY_TYPE_WPA2 -> suggestion.setWpa2Passphrase(pass)
+            SECURITY_TYPE_WPA -> suggestion.setWpa2Passphrase(pass)
+            SECURITY_TYPE_NA -> suggestion.setWpa2Passphrase(pass)
+            else -> suggestion.setWpa2Passphrase(pass)
+        }
+        val suggestionsList = listOf(suggestion.build())
+        val resultValue = wifiManager.addNetworkSuggestions(suggestionsList)
+        val resultKey = when (resultValue) {
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS -> "STATUS_NETWORK_SUGGESTIONS_SUCCESS"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_INTERNAL -> "STATUS_NETWORK_SUGGESTIONS_ERROR_INTERNAL"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_APP_DISALLOWED -> "STATUS_NETWORK_SUGGESTIONS_ERROR_APP_DISALLOWED"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE -> "STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_EXCEEDS_MAX_PER_APP -> "STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_EXCEEDS_MAX_PER_APP"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_REMOVE_INVALID -> "STATUS_NETWORK_SUGGESTIONS_ERROR_REMOVE_INVALID"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_NOT_ALLOWED -> "STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_NOT_ALLOWED"
+            WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_INVALID -> "STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_INVALID"
+            else -> ""
+        }
+        Log.d(TAG, "connectByWifiNetworkSuggestion: result: $resultValue: $resultKey")
+        Toast.makeText(this, "result: $resultValue: $resultKey", Toast.LENGTH_SHORT).show()
+
+
+        val intentFilter = IntentFilter(WifiManager.ACTION_WIFI_NETWORK_SUGGESTION_POST_CONNECTION)
+        suggestionPostConnectionReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (!intent.action.equals(WifiManager.ACTION_WIFI_NETWORK_SUGGESTION_POST_CONNECTION)) {
+                    return
+                }
+                Log.d(TAG, "connectByWifiNetworkSuggestion: onReceive: ")
+                // do post connect processing here
+            }
+        }
+        registerReceiver(suggestionPostConnectionReceiver, intentFilter)
+    }
+
+}
+
+@Composable
+fun Greeting(name: String, modifier: Modifier = Modifier) {
+    Text(
+        text = "Hello $name!",
+        modifier = modifier
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun GreetingPreview() {
+    WifiSettingsPusherTheme {
+        Greeting("Android")
+    }
+}
+
+
