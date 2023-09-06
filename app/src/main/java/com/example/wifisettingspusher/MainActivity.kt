@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity(), EventHandler {
 // Now, arrayOfObjects contains the parsed JSON data as an array of Wifi objects
         val listView = findViewById<ListView>(R.id.listView)
 //
-        val arrayAdapter: ArrayAdapter<String> = ArrayAdapter(
+        val arrayAdapter: ArrayAdapter<String> = ArrayAdapter(INSTALL_FAILED_VERIFICATION_FAILURE
             this,
             android.R.layout.simple_list_item_1, // Layout for each item
             ssidList       // Your array of objects
